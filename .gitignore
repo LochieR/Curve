@@ -1,0 +1,14 @@
+.vs/
+bin/
+bin-int/
+!premake/bin/
+
+**.sln
+**.vcxproj
+**.vcxproj.filters
+**.vcxproj.user
+**.csproj
+**.csproj.filters
+**.csproj.user
+
+View/assets/cache/
