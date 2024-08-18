@@ -18,10 +18,13 @@ namespace cv {
 		virtual void BeginRenderPass(CommandBuffer commandBuffer) const override;
 		virtual void EndRenderPass(CommandBuffer commandBuffer) const override;
 
+		virtual uint32_t GetImageCount() const override;
+		virtual uint32_t GetImageIndex() const override;
+
 		virtual void* GetNativeData() override { return m_Data; }
 		virtual const void* GetNativeData() const override { return m_Data; }
 
-		void RecreateSwapchain();
+		void RecreateSwapchain(void* semaphore = nullptr);
 	private:
 		void CreateSwapchain(void* oldSwapchain = nullptr);
 		void CreateRenderPass();

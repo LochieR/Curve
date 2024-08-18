@@ -155,7 +155,7 @@ namespace cv {
 		if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || m_Renderer->GetWindow().WasFramebufferResized())
 		{
 			m_Renderer->GetWindow().ResetFramebufferResized();
-			RecreateSwapchain();
+			RecreateSwapchain(semaphore);
 			return false;
 		}
 		VK_CHECK(result, "Failed to acquire next Vulkan swapchain image!");
@@ -193,6 +193,16 @@ namespace cv {
 	void VulkanSwapchain::EndRenderPass(CommandBuffer commandBuffer) const
 	{
 		vkCmdEndRenderPass(commandBuffer.As<VkCommandBuffer>());
+	}
+
+	uint32_t VulkanSwapchain::GetImageCount() const
+	{
+		return m_Data->ImageCount;
+	}
+
+	uint32_t VulkanSwapchain::GetImageIndex() const
+	{
+		return m_Data->ImageIndex;
 	}
 
 	void VulkanSwapchain::CreateSwapchain(void* oldSwapchain)
@@ -436,7 +446,7 @@ namespace cv {
 		}
 	}
 
-	void VulkanSwapchain::RecreateSwapchain()
+	void VulkanSwapchain::RecreateSwapchain(void* semaphore)
 	{
 		auto& vkd = m_Renderer->GetVulkanData();
 		Window& window = m_Renderer->GetWindow();
@@ -464,6 +474,29 @@ namespace cv {
 		CreateSwapchain(oldSwapchain);
 		CreateColorResources();
 		CreateFramebuffers();
+
+		m_Renderer->SubmitResourceFree([semaphore](VulkanRenderer* renderer)
+		{
+			auto& vkd = renderer->GetVulkanData();
+
+			for (size_t i = 0; i < vkd.FrameSemaphores[vkd.CurrentFrameIndex].size(); i++)
+			{
+				if (vkd.FrameSemaphores[vkd.CurrentFrameIndex][i] == (VkSemaphore)semaphore || semaphore == nullptr)
+				{
+					vkDestroySemaphore(vkd.Device, vkd.FrameSemaphores[vkd.CurrentFrameIndex][i], vkd.Allocator);
+
+					VkSemaphoreCreateInfo semaphoreInfo{};
+					semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+					VkResult result = vkCreateSemaphore(vkd.Device, &semaphoreInfo, vkd.Allocator, &vkd.FrameSemaphores[vkd.CurrentFrameIndex][i]);
+					VK_CHECK(result, "Failed to create Vulkan semaphore!");
+					if (semaphore)
+						break;
+				}
+			}
+
+			vkd.InUseSemaphores[vkd.CurrentFrameIndex].clear();
+		});
 
 		m_Renderer->SubmitResourceFree(
 		[oldSwapchain, oldImageViews, oldFramebuffers, oldDepthImage,
