@@ -32,6 +32,9 @@ namespace cv {
 		virtual void BeginRenderPass(CommandBuffer commandBuffer) const = 0;
 		virtual void EndRenderPass(CommandBuffer commandBuffer) const = 0;
 
+		virtual uint32_t GetImageCount() const = 0;
+		virtual uint32_t GetImageIndex() const = 0;
+
 		template<typename T>
 		T& GetNativeData() { return *reinterpret_cast<T*>(((NativeRendererObject*)this)->GetNativeData()); }
 		template<typename T>

@@ -2,6 +2,8 @@
 
 #include "Base.h"
 #include "Window.h"
+#include "LayerStack.h"
+#include "Timestep.h"
 
 #include <string>
 #include <vector>
@@ -53,6 +55,13 @@ namespace cv {
 		void Run();
 
 		void OnEvent(Event& event);
+
+		void PushLayer(Layer* layer);
+		void PushOverlay(Layer* layer);
+
+		Renderer* GetRenderer() { return m_Renderer; }
+		
+		static Application& Get() { return *s_Instance; }
 	private:
 		bool OnWindowCloseEvent(WindowCloseEvent& event);
 	private:
@@ -61,7 +70,13 @@ namespace cv {
 
 		Renderer* m_Renderer = nullptr;
 
+		LayerStack m_LayerStack;
+		float m_LastFrameTime = 0.0f;
+
+		bool m_Minimized = false;
 		bool m_Running = true;
+	private:
+		inline static Application* s_Instance = nullptr;
 	};
 
 	Application* CreateApplication(int argc, char** argv);

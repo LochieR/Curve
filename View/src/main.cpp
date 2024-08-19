@@ -1,3 +1,5 @@
+#include "View/ViewLayer.h"
+
 #include <Curve/Core/EntryPoint.h>
 
 cv::Application* cv::CreateApplication(int argc, char** argv)
@@ -11,6 +13,7 @@ cv::Application* cv::CreateApplication(int argc, char** argv)
 	spec.UseDefaultTitlebar = true;
 
 	Application* app = new Application(spec);
+	app->PushLayer(new ViewLayer());
 
 	return app;
 }

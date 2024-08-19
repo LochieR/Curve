@@ -557,14 +557,14 @@ namespace cv {
 		m_VkD->CurrentFrameIndex = (m_VkD->CurrentFrameIndex + 1) % CV_FRAMES_IN_FLIGHT;
 	}
 
-	void VulkanRenderer::Draw(CommandBuffer commandBuffer, size_t vertexCount) const
+	void VulkanRenderer::Draw(CommandBuffer commandBuffer, size_t vertexCount, size_t vertexOffset) const
 	{
-		vkCmdDraw(commandBuffer.As<VkCommandBuffer>(), (uint32_t)vertexCount, 1, 0, 0);
+		vkCmdDraw(commandBuffer.As<VkCommandBuffer>(), (uint32_t)vertexCount, 1, (uint32_t)vertexOffset, 0);
 	}
 
-	void VulkanRenderer::DrawIndexed(CommandBuffer commandBuffer, size_t indexCount) const
+	void VulkanRenderer::DrawIndexed(CommandBuffer commandBuffer, size_t indexCount, size_t indexOffset) const
 	{
-		vkCmdDrawIndexed(commandBuffer.As<VkCommandBuffer>(), (uint32_t)indexCount, 1, 0, 0, 0);
+		vkCmdDrawIndexed(commandBuffer.As<VkCommandBuffer>(), (uint32_t)indexCount, 1, (uint32_t)indexOffset, 0, 0);
 	}
 
 	void VulkanRenderer::BeginCommandBuffer(CommandBuffer commandBuffer) const

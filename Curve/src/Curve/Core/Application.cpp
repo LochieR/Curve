@@ -1,70 +1,25 @@
 #include "cvpch.h"
 #include "Application.h"
 
+#include "Time.h"
+
 #include "Curve/Renderer/Renderer.h"
 
 namespace cv {
 
-	struct RendererData
-	{
-		Shader* Shader = nullptr;
-		GraphicsPipeline* Pipeline = nullptr;
-		VertexBuffer* VertexBuffer = nullptr;
-		IndexBuffer* IndexBuffer = nullptr;
-
-		std::array<CommandBuffer, CV_FRAMES_IN_FLIGHT> CommandBuffers;
-	};
-
-	struct Vertex
-	{
-		glm::vec3 Position;
-		glm::vec4 Color;
-	};
-
-	static RendererData s_Data;
-
 	Application::Application(const ApplicationSpecification& spec)
 		: m_Specification(spec), m_Window(spec.WindowTitle, spec.WindowWidth, spec.WindowHeight)
 	{
+		s_Instance = this;
+
 		m_Window.SetEventCallback([this](Event& event) { this->OnEvent(event); });
 
 		m_Renderer = Renderer::Create(m_Window);
-
-		InputLayout inputLayout{};
-		inputLayout.VertexLayout = {
-			{ ShaderDataType::Float3, "a_Position" },
-			{ ShaderDataType::Float4, "a_Color" }
-		};
-		inputLayout.PushConstants = {};
-		inputLayout.ShaderResources = {};
-
-		std::array indices = {
-			0u, 1u, 2u, 2u, 3u, 0u
-		};
-
-		std::array vertices = {
-			Vertex{ {  0.5f,  0.5f, 0.0f }, { 0.8f, 0.3f, 0.5f, 1.0f } },
-			Vertex{ { -0.5f,  0.5f, 0.0f }, { 0.5f, 0.3f, 0.8f, 1.0f } },
-			Vertex{ { -0.5f, -0.5f, 0.0f }, { 0.3f, 0.8f, 0.5f, 1.0f } },
-			Vertex{ {  0.5f, -0.5f, 0.0f }, { 0.4f, 0.5f, 0.8f, 1.0f } }
-		};
-
-		s_Data = {};
-		s_Data.Shader = m_Renderer->CreateShader("Shaders/Basic.glsl");
-		s_Data.Pipeline = m_Renderer->CreateGraphicsPipeline(s_Data.Shader, PrimitiveTopology::TriangleList, inputLayout);
-		s_Data.VertexBuffer = m_Renderer->CreateVertexBuffer(sizeof(Vertex) * vertices.size());
-		s_Data.IndexBuffer = m_Renderer->CreateIndexBuffer(indices.data(), (uint32_t)indices.size());
-		s_Data.CommandBuffers = { m_Renderer->AllocateCommandBuffer(), m_Renderer->AllocateCommandBuffer() };
-
-		s_Data.VertexBuffer->SetData(vertices.data(), (uint32_t)(sizeof(Vertex) * vertices.size()));
 	}
 
 	Application::~Application()
 	{
-		delete s_Data.IndexBuffer;
-		delete s_Data.VertexBuffer;
-		delete s_Data.Pipeline;
-		delete s_Data.Shader;
+		m_LayerStack.Clear();
 
 		delete m_Renderer;
 	}
@@ -73,25 +28,21 @@ namespace cv {
 	{
 		m_Window.Show();
 
-		Swapchain* swapchain = m_Renderer->GetSwapchain();
-
 		while (m_Running)
 		{
-			CommandBuffer commandBuffer = s_Data.CommandBuffers[m_Renderer->GetCurrentFrameIndex()];
+			float time = Time::GetTime();
+			Timestep timestep = time - m_LastFrameTime;
+			m_LastFrameTime = time;
 
 			m_Renderer->BeginFrame();
-			m_Renderer->BeginCommandBuffer(commandBuffer);
-			swapchain->BeginRenderPass(commandBuffer);
-			
-			s_Data.Pipeline->Bind(commandBuffer);
-			s_Data.VertexBuffer->Bind(commandBuffer);
-			s_Data.IndexBuffer->Bind(commandBuffer);
-			
-			m_Renderer->DrawIndexed(commandBuffer, 6);
+			if (!m_Minimized)
+			{
+				for (Layer* layer : m_LayerStack)
+					layer->OnUpdate(timestep);
+			}
 
-			swapchain->EndRenderPass(commandBuffer);
-			m_Renderer->EndCommandBuffer(commandBuffer);
-			m_Renderer->SubmitCommandBuffer(commandBuffer);
+			// imgui here
+
 			m_Renderer->EndFrame();
 
 			m_Window.OnUpdate();
@@ -104,6 +55,35 @@ namespace cv {
 	{
 		EventDispatcher dispatcher(event);
 		dispatcher.Dispatch<WindowCloseEvent>([this](WindowCloseEvent& event) { return this->OnWindowCloseEvent(event); });
+		dispatcher.Dispatch<WindowResizeEvent>([this](WindowResizeEvent& event)
+		{
+			if (event.GetWidth() == 0 || event.GetHeight() == 0)
+			{
+				m_Minimized = true;
+				return false;
+			}
+			m_Minimized = false;
+			return false;
+		});
+
+		for (auto it = m_LayerStack.end(); it != m_LayerStack.begin();)
+		{
+			(*--it)->OnEvent(event);
+			if (event.Handled)
+				break;
+		}
+	}
+
+	void Application::PushLayer(Layer* layer)
+	{
+		m_LayerStack.PushLayer(layer);
+		layer->OnAttach();
+	}
+
+	void Application::PushOverlay(Layer* layer)
+	{
+		m_LayerStack.PushOverlay(layer);
+		layer->OnAttach();
 	}
 
 	bool Application::OnWindowCloseEvent(WindowCloseEvent& event)

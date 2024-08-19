@@ -21,8 +21,8 @@ namespace cv {
 
 		virtual Window& GetWindow() override { return m_Window; }
 
-		virtual void Draw(CommandBuffer commandBuffer, size_t vertexCount) const override;
-		virtual void DrawIndexed(CommandBuffer commandBuffer, size_t indexCount) const override;
+		virtual void Draw(CommandBuffer commandBuffer, size_t vertexCount, size_t vertexOffset = 0) const override;
+		virtual void DrawIndexed(CommandBuffer commandBuffer, size_t indexCount, size_t indexOffset = 0) const override;
 
 		virtual void BeginCommandBuffer(CommandBuffer commandBuffer) const override;
 		virtual void EndCommandBuffer(CommandBuffer commandBuffer) const override;

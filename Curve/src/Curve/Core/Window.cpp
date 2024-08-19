@@ -2,6 +2,13 @@
 #include "Window.h"
 
 #include <GLFW/glfw3.h>
+#ifdef CV_PLATFORM_WINDOWS
+#define GLFW_EXPOSE_NATIVE_WIN32
+#include <GLFW/glfw3native.h>
+
+#include <windows.h>
+#include <dwmapi.h>
+#endif
 
 namespace cv {
 
@@ -34,6 +41,8 @@ namespace cv {
 		//glfwWindowHint(GLFW_TITLEBAR, GLFW_FALSE);
 
 		m_Window = glfwCreateWindow((int)width, (int)height, title.c_str(), nullptr, nullptr);
+
+		Input::SetActiveWindow(m_Window);
 
 		glfwSetWindowUserPointer(m_Window, &m_Data);
 
@@ -179,5 +188,31 @@ namespace cv {
 	{
 		return (bool)glfwGetWindowAttrib(m_Window, GLFW_MAXIMIZED);
 	}
+
+#ifdef CV_PLATFORM_WINDOWS
+	void Window::SetWindowAttribute(WindowAttribute attribute, const glm::vec4& value)
+	{
+		HWND hwnd = glfwGetWin32Window(m_Window);
+		COLORREF color = RGB((int)(value.x * 255.0f), (int)(value.y * 255.0f), (int)(value.z * 255.0f));
+
+		switch (attribute)
+		{
+			case WindowAttribute::TitlebarColor:
+			{
+				DwmSetWindowAttribute(hwnd, DWMWA_CAPTION_COLOR, &color, sizeof(COLORREF));
+				SetWindowPos(hwnd, nullptr, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOOWNERZORDER | SWP_NOSIZE);
+				break;
+			}
+			case WindowAttribute::BorderColor:
+			{
+				DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &color, sizeof(COLORREF));
+				SetWindowPos(hwnd, nullptr, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOOWNERZORDER | SWP_NOSIZE);
+				break;
+			}
+			default:
+				break;
+		}
+	}
+#endif
 
 }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Base.h"
 #include "Event.h"
 
 #include <string>
@@ -8,6 +9,14 @@
 struct GLFWwindow;
 
 namespace cv {
+
+#ifdef CV_PLATFORM_WINDOWS
+	enum class WindowAttribute
+	{
+		TitlebarColor,
+		BorderColor
+	};
+#endif
 
 	class Window
 	{
@@ -27,10 +36,17 @@ namespace cv {
 		
 		bool IsMaximized() const;
 
+		uint32_t GetWidth() const { return m_Data.Width; }
+		uint32_t GetHeight() const { return m_Data.Height; }
+
 		bool WasFramebufferResized() const { return m_Data.FramebufferResized; }
 		void ResetFramebufferResized() { m_Data.FramebufferResized = false; }
 
 		GLFWwindow* GetHandle() const { return m_Window; }
+
+#ifdef CV_PLATFORM_WINDOWS
+		void SetWindowAttribute(WindowAttribute attribute, const glm::vec4& value);
+#endif
 	private:
 		GLFWwindow* m_Window = nullptr;
 

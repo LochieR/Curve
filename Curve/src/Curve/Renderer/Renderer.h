@@ -25,8 +25,8 @@ namespace cv {
 
 		virtual Window& GetWindow() = 0;
 
-		virtual void Draw(CommandBuffer commandBuffer, size_t vertexCount) const = 0;
-		virtual void DrawIndexed(CommandBuffer commandBuffer, size_t indexCount) const = 0;
+		virtual void Draw(CommandBuffer commandBuffer, size_t vertexCount, size_t vertexOffset = 0) const = 0;
+		virtual void DrawIndexed(CommandBuffer commandBuffer, size_t indexCount, size_t indexOffset = 0) const = 0;
 
 		virtual void BeginCommandBuffer(CommandBuffer commandBuffer) const = 0;
 		virtual void EndCommandBuffer(CommandBuffer commandBuffer) const = 0;

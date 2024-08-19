@@ -97,6 +97,11 @@ project "Curve"
 	filter "system:windows"
 		systemversion "latest"
 
+		links
+		{
+			"dwmapi.lib"
+		}
+
 	filter "configurations:Debug"
 		defines "CV_DEBUG"
 		runtime "Debug"
