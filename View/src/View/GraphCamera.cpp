@@ -51,13 +51,6 @@ namespace cv {
 			changed = true;
 			return false;
 		});
-		dispatcher.Dispatch<WindowResizeEvent>([this, &changed](WindowResizeEvent& event)
-		{
-			OnResize((float)event.GetWidth(), (float)event.GetHeight());
-
-			changed = true;
-			return false;
-		});
 
 		return changed;
 	}

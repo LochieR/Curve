@@ -3,9 +3,12 @@
 #include "Buffer.h"
 #include "Shader.h"
 #include "Swapchain.h"
+#include "Framebuffer.h"
 #include "CommandBuffer.h"
 #include "GraphicsPipeline.h"
 #include "NativeRendererObject.h"
+
+#include "Curve/ImGui/ImGuiLayer.h"
 
 #include "Curve/Core/Window.h"
 
@@ -41,8 +44,11 @@ namespace cv {
 		virtual Swapchain* CreateSwapchain(const SwapchainSpecification& spec) = 0;
 		virtual Shader* CreateShader(const std::filesystem::path& path) = 0;
 		virtual GraphicsPipeline* CreateGraphicsPipeline(Shader* shader, PrimitiveTopology topology, const InputLayout& layout) = 0;
+		virtual GraphicsPipeline* CreateGraphicsPipeline(Shader* shader, PrimitiveTopology topology, const InputLayout& layout, Framebuffer* framebuffer) = 0;
 		virtual VertexBuffer* CreateVertexBuffer(size_t size) = 0;
 		virtual IndexBuffer* CreateIndexBuffer(uint32_t* indices, uint32_t indexCount) = 0;
+		virtual Framebuffer* CreateFramebuffer(const FramebufferSpecification& spec) = 0;
+		virtual ImGuiLayer* CreateImGuiLayer() = 0;
 
 		virtual uint32_t GetCurrentFrameIndex() const = 0;
 

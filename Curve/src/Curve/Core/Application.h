@@ -5,6 +5,8 @@
 #include "LayerStack.h"
 #include "Timestep.h"
 
+#include "Curve/ImGui/ImGuiLayer.h"
+
 #include <string>
 #include <vector>
 
@@ -72,6 +74,8 @@ namespace cv {
 
 		LayerStack m_LayerStack;
 		float m_LastFrameTime = 0.0f;
+
+		ImGuiLayer* m_ImGuiLayer = nullptr;
 
 		bool m_Minimized = false;
 		bool m_Running = true;

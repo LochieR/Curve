@@ -7,7 +7,9 @@
 #include "VulkanBuffer.h"
 #include "VulkanShader.h"
 #include "VulkanSwapchain.h"
+#include "VulkanFramebuffer.h"
 #include "VulkanGraphicsPipeline.h"
+#include "VulkanImGuiLayer.h"
 
 #include <vulkan/vulkan.h>
 #include <GLFW/glfw3.h>
@@ -684,6 +686,11 @@ namespace cv {
 		return new VulkanGraphicsPipeline(this, shader, topology, layout);
 	}
 
+	GraphicsPipeline* VulkanRenderer::CreateGraphicsPipeline(Shader* shader, PrimitiveTopology topology, const InputLayout& layout, Framebuffer* framebuffer)
+	{
+		return new VulkanGraphicsPipeline(this, shader, topology, layout, framebuffer);
+	}
+
 	VertexBuffer* VulkanRenderer::CreateVertexBuffer(size_t size)
 	{
 		return new VulkanVertexBuffer(this, size);
@@ -692,6 +699,16 @@ namespace cv {
 	IndexBuffer* VulkanRenderer::CreateIndexBuffer(uint32_t* indices, uint32_t indexCount)
 	{
 		return new VulkanIndexBuffer(this, indices, indexCount);
+	}
+
+	Framebuffer* VulkanRenderer::CreateFramebuffer(const FramebufferSpecification& spec)
+	{
+		return new VulkanFramebuffer(this, spec);
+	}
+
+	ImGuiLayer* VulkanRenderer::CreateImGuiLayer()
+	{
+		return new VulkanImGuiLayer(this);
 	}
 
 	uint32_t VulkanRenderer::GetCurrentFrameIndex() const

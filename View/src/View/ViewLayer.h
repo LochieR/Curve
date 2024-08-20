@@ -4,6 +4,9 @@
 #include "LineRenderer.h"
 
 #include <Curve/Core/Layer.h>
+#include <Curve/Renderer/Framebuffer.h>
+
+#include <glm/glm.hpp>
 
 namespace cv {
 
@@ -21,6 +24,10 @@ namespace cv {
 	private:
 		LineRenderer* m_LineRenderer = nullptr;
 		GraphCamera m_Camera;
+
+		Framebuffer* m_Framebuffer = nullptr;
+
+		glm::vec2 m_ViewportSize = { 800, 600 };
 	};
 
 }

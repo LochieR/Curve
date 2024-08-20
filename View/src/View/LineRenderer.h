@@ -37,9 +37,11 @@ namespace cv {
 	public:
 		LineRenderer() = default;
 		LineRenderer(Renderer* renderer);
+		LineRenderer(Renderer* renderer, Framebuffer* framebuffer);
 		~LineRenderer();
 
 		void Render(const GraphCamera& camera);
+		void Render(const GraphCamera& camera, Framebuffer* framebuffer);
 
 		void AddLine(std::function<float(float)>&& f, const glm::vec4& color);
 

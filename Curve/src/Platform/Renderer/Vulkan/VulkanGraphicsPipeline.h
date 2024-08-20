@@ -12,6 +12,7 @@ namespace cv {
 	{
 	public:
 		VulkanGraphicsPipeline(VulkanRenderer* renderer, Shader* shader, PrimitiveTopology topology, const InputLayout& layout);
+		VulkanGraphicsPipeline(VulkanRenderer* renderer, Shader* shader, PrimitiveTopology topology, const InputLayout& layout, Framebuffer* framebuffer);
 		virtual ~VulkanGraphicsPipeline();
 
 		virtual void Bind(CommandBuffer commandBuffer) const override;
@@ -23,6 +24,7 @@ namespace cv {
 	private:
 		VulkanRenderer* m_Renderer = nullptr;
 		GraphicsPipelineData* m_Data = nullptr;
+		Framebuffer* m_Framebuffer = nullptr;
 	};
 
 }

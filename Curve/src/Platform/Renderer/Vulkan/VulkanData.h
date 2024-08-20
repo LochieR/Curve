@@ -104,6 +104,43 @@ namespace cv {
 		VkDescriptorSet DescriptorSet = nullptr;
 	};
 
+	struct FramebufferData
+	{
+		uint32_t ImageCount = 0;
+		uint32_t ImageIndex = 0;
+
+		std::vector<VkImage> Images;
+		std::vector<VkDeviceMemory> ImageMemorys;
+		std::vector<VkImageView> ImageViews;
+
+		std::vector<std::vector<VkImage>> AttachmentImages;
+		std::vector<std::vector<VkDeviceMemory>> AttachmentImageMemorys;
+		std::vector<std::vector<VkImageView>> AttachmentImageViews;
+
+		std::vector<VkImage> ColorImages;
+		std::vector<VkDeviceMemory> ColorImageMemorys;
+		std::vector<VkImageView> ColorImageViews;
+
+		VkImage DepthImage = nullptr;
+		VkDeviceMemory DepthImageMemory = nullptr;
+		VkImageView DepthImageView = nullptr;
+
+		VkSampleCountFlagBits MSAASampleCount;
+
+		std::vector<VkFramebuffer> Framebuffers;
+		std::vector<VkDescriptorSet> Descriptors;
+
+		VkRenderPass RenderPass = nullptr;
+		VkSampler Sampler = nullptr;
+	};
+
+	struct ImGuiLayerData
+	{
+		std::array<CommandBuffer, CV_FRAMES_IN_FLIGHT> CommandBuffers;
+
+		VkDescriptorPool DescriptorPool = nullptr;
+	};
+
 	namespace Utils {
 
 		// general

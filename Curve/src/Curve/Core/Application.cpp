@@ -15,6 +15,12 @@ namespace cv {
 		m_Window.SetEventCallback([this](Event& event) { this->OnEvent(event); });
 
 		m_Renderer = Renderer::Create(m_Window);
+
+		if (spec.UseImGui)
+		{
+			m_ImGuiLayer = m_Renderer->CreateImGuiLayer();
+			PushLayer(m_ImGuiLayer);
+		}
 	}
 
 	Application::~Application()
@@ -41,9 +47,20 @@ namespace cv {
 					layer->OnUpdate(timestep);
 			}
 
-			// imgui here
+			if (m_Specification.UseImGui)
+			{
+				m_ImGuiLayer->Begin();
+
+				for (Layer* layer : m_LayerStack)
+					layer->OnImGuiRender();
+
+				m_ImGuiLayer->End();
+			}
 
 			m_Renderer->EndFrame();
+
+			if (m_Specification.UseImGui)
+				m_ImGuiLayer->UpdateViewports();
 
 			m_Window.OnUpdate();
 		}

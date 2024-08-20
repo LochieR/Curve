@@ -37,8 +37,11 @@ namespace cv {
 		virtual Swapchain* CreateSwapchain(const SwapchainSpecification& spec) override;
 		virtual Shader* CreateShader(const std::filesystem::path& path) override;
 		virtual GraphicsPipeline* CreateGraphicsPipeline(Shader* shader, PrimitiveTopology topology, const InputLayout& layout) override;
+		virtual GraphicsPipeline* CreateGraphicsPipeline(Shader* shader, PrimitiveTopology topology, const InputLayout& layout, Framebuffer* framebuffer) override;
 		virtual VertexBuffer* CreateVertexBuffer(size_t size) override;
 		virtual IndexBuffer* CreateIndexBuffer(uint32_t* indices, uint32_t indexCount) override;
+		virtual Framebuffer* CreateFramebuffer(const FramebufferSpecification& spec) override;
+		virtual ImGuiLayer* CreateImGuiLayer() override;
 
 		virtual uint32_t GetCurrentFrameIndex() const override;
 
