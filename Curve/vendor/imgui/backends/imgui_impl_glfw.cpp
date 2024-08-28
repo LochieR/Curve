@@ -119,6 +119,8 @@
 #endif
 #endif
 
+#include <map>
+
 // We gather version tests as define in order to easily see which features are version-dependent.
 #define GLFW_VERSION_COMBINED           (GLFW_VERSION_MAJOR * 1000 + GLFW_VERSION_MINOR * 100 + GLFW_VERSION_REVISION)
 #define GLFW_HAS_WINDOW_TOPMOST         (GLFW_VERSION_COMBINED >= 3200) // 3.2+ GLFW_FLOATING
@@ -726,6 +728,8 @@ static void ImGui_ImplGlfw_UpdateMouseData()
     ImGuiIO& io = ImGui::GetIO();
     ImGuiPlatformIO& platform_io = ImGui::GetPlatformIO();
 
+    static std::map<GLFWwindow*, bool> windowNoInputs;
+
     ImGuiID mouse_viewport_id = 0;
     const ImVec2 mouse_pos_prev = io.MousePos;
     for (int n = 0; n < platform_io.Viewports.Size; n++)
@@ -776,8 +780,13 @@ static void ImGui_ImplGlfw_UpdateMouseData()
         // FIXME: This is currently only correct on Win32. See what we do below with the WM_NCHITTEST, missing an equivalent for other systems.
         // See https://github.com/glfw/glfw/issues/1236 if you want to help in making this a GLFW feature.
 #if GLFW_HAS_MOUSE_PASSTHROUGH
+        auto it = windowNoInputs.find(window);
         const bool window_no_input = (viewport->Flags & ImGuiViewportFlags_NoInputs) != 0;
-        glfwSetWindowAttrib(window, GLFW_MOUSE_PASSTHROUGH, window_no_input);
+        
+        if (it != windowNoInputs.end() && it->second != window_no_input)
+            glfwSetWindowAttrib(window, GLFW_MOUSE_PASSTHROUGH, window_no_input);
+
+        windowNoInputs[window] = window_no_input;
 #endif
 #if GLFW_HAS_MOUSE_PASSTHROUGH || GLFW_HAS_WINDOW_HOVERED
         if (glfwGetWindowAttrib(window, GLFW_HOVERED))

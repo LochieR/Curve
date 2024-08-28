@@ -46,7 +46,7 @@ namespace cv {
 
 	VulkanShader::~VulkanShader()
 	{
-		m_Renderer->SubmitResourceFree([vertexModule = m_Data->VertexModule, fragmentModule = m_Data->FragmentModule, data = m_Data](VulkanRenderer* renderer)
+		m_Renderer->SubmitResourceFree([vertexModule = m_Data->VertexModule, fragmentModule = m_Data->FragmentModule, computeModule = m_Data->ComputeModule, data = m_Data](VulkanRenderer* renderer)
 		{
 			auto& vkd = renderer->GetVulkanData();
 
@@ -54,6 +54,8 @@ namespace cv {
 				vkDestroyShaderModule(vkd.Device, vertexModule, vkd.Allocator);
 			if (fragmentModule)
 				vkDestroyShaderModule(vkd.Device, fragmentModule, vkd.Allocator);
+			if (computeModule)
+				vkDestroyShaderModule(vkd.Device, computeModule, vkd.Allocator);
 			
 			delete data;
 		});
@@ -63,7 +65,7 @@ namespace cv {
 	{
 		auto& vkd = m_Renderer->GetVulkanData();
 
-		m_Renderer->SubmitResourceFree([vertexModule = m_Data->VertexModule, fragmentModule = m_Data->FragmentModule](VulkanRenderer* renderer)
+		m_Renderer->SubmitResourceFree([vertexModule = m_Data->VertexModule, fragmentModule = m_Data->FragmentModule, computeModule = m_Data->ComputeModule](VulkanRenderer* renderer)
 		{
 			auto& vkd = renderer->GetVulkanData();
 
@@ -71,23 +73,34 @@ namespace cv {
 				vkDestroyShaderModule(vkd.Device, vertexModule, vkd.Allocator);
 			if (fragmentModule)
 				vkDestroyShaderModule(vkd.Device, fragmentModule, vkd.Allocator);
+			if (computeModule)
+				vkDestroyShaderModule(vkd.Device, computeModule, vkd.Allocator);
 		});
 
 		Utils::CreateCacheDirectory();
 
 		std::string source = ReadFile(m_Filepath);
-		std::array<std::string, 2> shaders = PreProcess(source);
 
-		CompileOrGetVulkanBinaries(shaders);
-		CreateShaderModules();
+		bool isCompute;
+		std::array<std::string, 2> shaders = PreProcess(source, isCompute);
+
+		CompileOrGetVulkanBinaries(shaders, isCompute);
+		CreateShaderModules(isCompute);
+
+		m_IsCompute = isCompute;
 	}
 
-	void VulkanShader::CompileOrGetVulkanBinaries(const std::array<std::string, 2>& sources)
+	void VulkanShader::CompileOrGetVulkanBinaries(const std::array<std::string, 2>& sources, bool isCompute)
 	{
 		shaderc::Compiler compiler;
 		shaderc::CompileOptions options;
 		options.SetTargetEnvironment(shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_0);
-		const bool debug = false;
+		const bool debug =
+#ifdef CV_DEBUG
+			true;
+#else
+			false;
+#endif
 		if (debug)
 		{
 			options.SetGenerateDebugInfo();
@@ -98,11 +111,12 @@ namespace cv {
 			options.SetOptimizationLevel(shaderc_optimization_level_performance);
 		}
 
-		{ // vertex shader
+		if (isCompute)
+		{
 			std::filesystem::path cacheDirectory = Utils::GetCacheDirectory();
 
 			std::filesystem::path shaderFilePath = m_Filepath;
-			std::filesystem::path cachedPath = cacheDirectory / (shaderFilePath.filename().string() + ".cached_vulkan.vert");
+			std::filesystem::path cachedPath = cacheDirectory / (shaderFilePath.filename().string() + ".cached_vulkan.comp.spv");
 
 			std::ifstream in(cachedPath, std::ios::in | std::ios::binary);
 			if (in.is_open())
@@ -111,91 +125,146 @@ namespace cv {
 				auto size = in.tellg();
 				in.seekg(0, std::ios::beg);
 
-				m_Data->VertexData.resize(size / sizeof(uint32_t));
-				in.read((char*)m_Data->VertexData.data(), size);
+				m_Data->ComputeData.resize(size / sizeof(uint32_t));
+				in.read((char*)m_Data->ComputeData.data(), size);
 			}
 			else
 			{
-				shaderc::SpvCompilationResult module = compiler.CompileGlslToSpv(sources[0], shaderc_glsl_vertex_shader, shaderFilePath.string().c_str(), options);
+				shaderc::SpvCompilationResult module = compiler.CompileGlslToSpv(sources[0], shaderc_glsl_compute_shader, shaderFilePath.string().c_str(), options);
 				if (module.GetCompilationStatus() != shaderc_compilation_status_success)
 				{
 					std::cerr << module.GetErrorMessage() << std::endl;
 					CV_ASSERT(false);
 				}
 
-				m_Data->VertexData = std::vector<uint32_t>(module.cbegin(), module.cend());
+				m_Data->ComputeData = std::vector<uint32_t>(module.cbegin(), module.cend());
 
 				std::ofstream out(cachedPath, std::ios::out | std::ios::binary);
 				if (out.is_open())
 				{
-					out.write((char*)m_Data->VertexData.data(), m_Data->VertexData.size() * sizeof(uint32_t));
+					out.write((char*)m_Data->ComputeData.data(), m_Data->ComputeData.size() * sizeof(uint32_t));
 					out.flush();
 					out.close();
 				}
 			}
+
+			Reflect("Compute Shader", m_Data->ComputeData);
 		}
-		{ // fragment shader
-			std::filesystem::path cacheDirectory = Utils::GetCacheDirectory();
+		else
+		{
+			{ // vertex shader
+				std::filesystem::path cacheDirectory = Utils::GetCacheDirectory();
 
-			std::filesystem::path shaderFilePath = m_Filepath;
-			std::filesystem::path cachedPath = cacheDirectory / (shaderFilePath.filename().string() + ".cached_vulkan.frag");
+				std::filesystem::path shaderFilePath = m_Filepath;
+				std::filesystem::path cachedPath = cacheDirectory / (shaderFilePath.filename().string() + ".cached_vulkan.vert.spv");
 
-			std::ifstream in(cachedPath, std::ios::in | std::ios::binary);
-			if (in.is_open())
-			{
-				in.seekg(0, std::ios::end);
-				auto size = in.tellg();
-				in.seekg(0, std::ios::beg);
-
-				m_Data->FragmentData.resize(size / sizeof(uint32_t));
-				in.read((char*)m_Data->FragmentData.data(), size);
-			}
-			else
-			{
-				shaderc::SpvCompilationResult module = compiler.CompileGlslToSpv(sources[1], shaderc_glsl_fragment_shader, shaderFilePath.string().c_str(), options);
-				if (module.GetCompilationStatus() != shaderc_compilation_status_success)
+				std::ifstream in(cachedPath, std::ios::in | std::ios::binary);
+				if (in.is_open())
 				{
-					std::cerr << module.GetErrorMessage() << std::endl;
-					CV_ASSERT(false);
+					in.seekg(0, std::ios::end);
+					auto size = in.tellg();
+					in.seekg(0, std::ios::beg);
+
+					m_Data->VertexData.resize(size / sizeof(uint32_t));
+					in.read((char*)m_Data->VertexData.data(), size);
 				}
-
-				m_Data->FragmentData = std::vector<uint32_t>(module.cbegin(), module.cend());
-
-				std::ofstream out(cachedPath, std::ios::out | std::ios::binary);
-				if (out.is_open())
+				else
 				{
-					out.write((char*)m_Data->FragmentData.data(), m_Data->FragmentData.size() * sizeof(uint32_t));
-					out.flush();
-					out.close();
+					shaderc::SpvCompilationResult module = compiler.CompileGlslToSpv(sources[0], shaderc_glsl_vertex_shader, shaderFilePath.string().c_str(), options);
+					if (module.GetCompilationStatus() != shaderc_compilation_status_success)
+					{
+						std::cerr << module.GetErrorMessage() << std::endl;
+						CV_ASSERT(false);
+					}
+
+					m_Data->VertexData = std::vector<uint32_t>(module.cbegin(), module.cend());
+
+					std::ofstream out(cachedPath, std::ios::out | std::ios::binary);
+					if (out.is_open())
+					{
+						out.write((char*)m_Data->VertexData.data(), m_Data->VertexData.size() * sizeof(uint32_t));
+						out.flush();
+						out.close();
+					}
 				}
 			}
+			{ // fragment shader
+				std::filesystem::path cacheDirectory = Utils::GetCacheDirectory();
+
+				std::filesystem::path shaderFilePath = m_Filepath;
+				std::filesystem::path cachedPath = cacheDirectory / (shaderFilePath.filename().string() + ".cached_vulkan.frag.spv");
+
+				std::ifstream in(cachedPath, std::ios::in | std::ios::binary);
+				if (in.is_open())
+				{
+					in.seekg(0, std::ios::end);
+					auto size = in.tellg();
+					in.seekg(0, std::ios::beg);
+
+					m_Data->FragmentData.resize(size / sizeof(uint32_t));
+					in.read((char*)m_Data->FragmentData.data(), size);
+				}
+				else
+				{
+					shaderc::SpvCompilationResult module = compiler.CompileGlslToSpv(sources[1], shaderc_glsl_fragment_shader, shaderFilePath.string().c_str(), options);
+					if (module.GetCompilationStatus() != shaderc_compilation_status_success)
+					{
+						std::cerr << module.GetErrorMessage() << std::endl;
+						CV_ASSERT(false);
+					}
+
+					m_Data->FragmentData = std::vector<uint32_t>(module.cbegin(), module.cend());
+
+					std::ofstream out(cachedPath, std::ios::out | std::ios::binary);
+					if (out.is_open())
+					{
+						out.write((char*)m_Data->FragmentData.data(), m_Data->FragmentData.size() * sizeof(uint32_t));
+						out.flush();
+						out.close();
+					}
+				}
+			}
+
+			Reflect("Vertex Shader", m_Data->VertexData);
+			Reflect("Fragment Shader", m_Data->FragmentData);
 		}
 
-		Reflect("Vertex Shader", m_Data->VertexData);
-		Reflect("Fragment Shader", m_Data->FragmentData);
 	}
 
-	void VulkanShader::CreateShaderModules()
+	void VulkanShader::CreateShaderModules(bool isCompute)
 	{
 		auto& vkd = m_Renderer->GetVulkanData();
 
+		if (isCompute)
 		{
 			VkShaderModuleCreateInfo createInfo{};
 			createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-			createInfo.codeSize = 4 * m_Data->VertexData.size();
-			createInfo.pCode = reinterpret_cast<const uint32_t*>(m_Data->VertexData.data());
+			createInfo.codeSize = 4 * m_Data->ComputeData.size();
+			createInfo.pCode = const_cast<const uint32_t*>(m_Data->ComputeData.data());
 
-			VkResult result = vkCreateShaderModule(vkd.Device, &createInfo, vkd.Allocator, &m_Data->VertexModule);
-			VK_CHECK(result, "Failed to create shader module!");
+			VkResult result = vkCreateShaderModule(vkd.Device, &createInfo, vkd.Allocator, &m_Data->ComputeModule);
+			VK_CHECK(result, "Failed to create Vulkan shader module!");
 		}
+		else
 		{
-			VkShaderModuleCreateInfo createInfo{};
-			createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-			createInfo.codeSize = 4 * m_Data->FragmentData.size();
-			createInfo.pCode = reinterpret_cast<const uint32_t*>(m_Data->FragmentData.data());
+			{
+				VkShaderModuleCreateInfo createInfo{};
+				createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+				createInfo.codeSize = 4 * m_Data->VertexData.size();
+				createInfo.pCode = const_cast<const uint32_t*>(m_Data->VertexData.data());
 
-			VkResult result = vkCreateShaderModule(vkd.Device, &createInfo, vkd.Allocator, &m_Data->FragmentModule);
-			VK_CHECK(result, "Failed to create shader module!");
+				VkResult result = vkCreateShaderModule(vkd.Device, &createInfo, vkd.Allocator, &m_Data->VertexModule);
+				VK_CHECK(result, "Failed to create Vulkan shader module!");
+			}
+			{
+				VkShaderModuleCreateInfo createInfo{};
+				createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+				createInfo.codeSize = 4 * m_Data->FragmentData.size();
+				createInfo.pCode = const_cast<const uint32_t*>(m_Data->FragmentData.data());
+
+				VkResult result = vkCreateShaderModule(vkd.Device, &createInfo, vkd.Allocator, &m_Data->FragmentModule);
+				VK_CHECK(result, "Failed to create Vulkan shader module!");
+			}
 		}
 	}
 
@@ -261,12 +330,16 @@ namespace cv {
 		return result;
 	}
 
-	std::array<std::string, 2> VulkanShader::PreProcess(const std::string& source)
+	std::array<std::string, 2> VulkanShader::PreProcess(const std::string& source, bool& isCompute)
 	{
-		std::array<std::string, 2> result;
+		isCompute = false;
+		bool hasGraphicsShaders = false;
+
+		std::array<std::string, 2> result = {};
+		std::string computeResult;
 
 		const char* typeToken = "#type";
-		size_t typeTokenLength = strlen(typeToken);
+		size_t typeTokenLength = std::strlen(typeToken);
 		size_t pos = source.find(typeToken, 0);
 		while (pos != std::string::npos)
 		{
@@ -275,18 +348,36 @@ namespace cv {
 			size_t begin = pos + typeTokenLength + 1;
 			std::string type = source.substr(begin, eol - begin);
 
-			CV_ASSERT(type == "vertex" || type == "fragment" || type == "pixel" && "Invalid shader source type!");
+			CV_ASSERT(type == "vertex" || type == "fragment" || type == "pixel" || type == "compute" && "Invalid shader source type!");
 
 			size_t nextLinePos = source.find_first_not_of("\r\n", eol);
 			CV_ASSERT(nextLinePos != std::string::npos);
 			pos = source.find(typeToken, nextLinePos);
 
 			if (type == "vertex")
+			{
 				result[0] = (pos == std::string::npos) ? source.substr(nextLinePos) : source.substr(nextLinePos, pos - nextLinePos);
+				hasGraphicsShaders = true;
+			}
 			else if (type == "fragment" || type == "pixel")
+			{
 				result[1] = (pos == std::string::npos) ? source.substr(nextLinePos) : source.substr(nextLinePos, pos - nextLinePos);
+				hasGraphicsShaders = true;
+			}
+			else if (type == "compute")
+			{
+				computeResult = (pos == std::string::npos) ? source.substr(nextLinePos) : source.substr(nextLinePos, pos - nextLinePos);
+				isCompute = true;
+			}
 		}
-
+		
+		if (isCompute && hasGraphicsShaders)
+		{
+			CV_ASSERT(false && "Combined shader file cannot have vertex/fragment/pixel shader and a compute shader!");
+		}
+		if (isCompute)
+			result[0] = computeResult;
+		
 		return result;
 	}
 

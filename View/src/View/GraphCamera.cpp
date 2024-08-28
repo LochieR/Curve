@@ -22,35 +22,38 @@ namespace cv {
 		RecalculateViewMatrix();
 	}
 
-	bool GraphCamera::OnUpdate(Timestep ts)
+	bool GraphCamera::OnUpdate(Timestep ts, bool ignoreInput)
 	{
 		glm::vec2 mousePosition = Input::GetMousePosition();
 		glm::vec2 delta = m_MousePosition - mousePosition;
 		m_MousePosition = mousePosition;
 
-		if (Input::IsMouseButtonDown(MouseButton::ButtonLeft))
+		if (!ignoreInput && Input::IsMouseButtonDown(MouseButton::ButtonLeft))
 		{
 			delta *= m_ZoomLevel;
-			SetPosition(m_Position - glm::vec3(-delta.x * 0.003f, delta.y * 0.003f, 0.0f));
+			SetPosition(m_Position - glm::vec3(-delta.x * 0.005f, delta.y * 0.005f, 0.0f));
 			return true;
 		}
 		return false;
 	}
 
-	bool GraphCamera::OnEvent(Event& event)
+	bool GraphCamera::OnEvent(Event& event, bool ignoreInput)
 	{
 		bool changed = false;
 
 		EventDispatcher dispatcher(event);
-		dispatcher.Dispatch<MouseScrolledEvent>([this, &changed](MouseScrolledEvent& event)
+		if (!ignoreInput)
 		{
-			m_ZoomLevel -= event.GetYOffset() * 0.25f;
-			m_ZoomLevel = std::max(m_ZoomLevel, 0.25f);
-			SetProjection(-m_AspectRatio * m_ZoomLevel, m_AspectRatio * m_ZoomLevel, -m_ZoomLevel, m_ZoomLevel);
+			dispatcher.Dispatch<MouseScrolledEvent>([this, &changed](MouseScrolledEvent& event)
+			{
+				m_ZoomLevel -= event.GetYOffset() * 0.25f;
+				m_ZoomLevel = std::max(m_ZoomLevel, 0.25f);
+				SetProjection(-m_AspectRatio * m_ZoomLevel, m_AspectRatio * m_ZoomLevel, -m_ZoomLevel, m_ZoomLevel);
 
-			changed = true;
-			return false;
-		});
+				changed = true;
+				return false;
+			});
+		}
 
 		return changed;
 	}

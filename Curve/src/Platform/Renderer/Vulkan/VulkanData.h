@@ -87,6 +87,9 @@ namespace cv {
 		std::vector<uint32_t> FragmentData;
 		VkShaderModule VertexModule = nullptr;
 		VkShaderModule FragmentModule = nullptr;
+
+		std::vector<uint32_t> ComputeData;
+		VkShaderModule ComputeModule = nullptr;
 	};
 
 	struct BufferData
@@ -96,7 +99,7 @@ namespace cv {
 		size_t Size = 0;
 	};
 
-	struct GraphicsPipelineData
+	struct PipelineData
 	{
 		VkPipelineLayout PipelineLayout = nullptr;
 		VkPipeline Pipeline = nullptr;
@@ -129,6 +132,8 @@ namespace cv {
 
 		std::vector<VkFramebuffer> Framebuffers;
 		std::vector<VkDescriptorSet> Descriptors;
+
+		std::vector<VkClearValue> ClearValues;
 
 		VkRenderPass RenderPass = nullptr;
 		VkSampler Sampler = nullptr;

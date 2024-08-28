@@ -25,7 +25,9 @@ namespace cv {
 
 		virtual uint32_t GetColorAttachmentCount() const override;
 
-		//virtual void CopyAttachmentImageToBuffer(uint32_t attachmentIndex) override;
+		virtual void CopyAttachmentImageToBuffer(CommandBuffer commandBuffer, uint32_t attachmentIndex, Buffer<StagingBuffer>* buffer) override;
+		virtual void CopyAttachmentImageToBuffer(CommandBuffer commandBuffer, uint32_t attachmentIndex, Buffer<StagingBuffer>* buffer, const glm::vec2& pixelCoordinate) override;
+		virtual void CopyAttachmentImageToBuffer(uint32_t attachmentIndex, Buffer<StagingBuffer>* buffer) override;
 
 		virtual void* GetCurrentDescriptor() const override;
 

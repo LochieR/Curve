@@ -1,7 +1,10 @@
 #pragma once
 
+#include "Buffer.h"
 #include "Swapchain.h"
 #include "CommandBuffer.h"
+
+#include <glm/glm.hpp>
 
 namespace cv {
 
@@ -24,7 +27,9 @@ namespace cv {
 
 		virtual uint32_t GetColorAttachmentCount() const = 0;
 
-		//virtual void CopyAttachmentImageToBuffer(uint32_t attachmentIndex) = 0;
+		virtual void CopyAttachmentImageToBuffer(CommandBuffer commandBuffer, uint32_t attachmentIndex, Buffer<StagingBuffer>* buffer) = 0;
+		virtual void CopyAttachmentImageToBuffer(CommandBuffer commandBuffer, uint32_t attachmentIndex, Buffer<StagingBuffer>* buffer, const glm::vec2& pixelCoordinate) = 0;
+		virtual void CopyAttachmentImageToBuffer(uint32_t attachmentIndex, Buffer<StagingBuffer>* buffer) = 0;
 
 		virtual void* GetCurrentDescriptor() const = 0;
 

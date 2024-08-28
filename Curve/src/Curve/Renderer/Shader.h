@@ -13,6 +13,7 @@ namespace cv {
 
 		virtual void Reload() = 0;
 
+		virtual bool IsCompute() const = 0;
 		virtual const std::filesystem::path& GetFilepath() const = 0;
 
 		template<typename T>

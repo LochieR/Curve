@@ -61,6 +61,8 @@ namespace cv {
 		void PushLayer(Layer* layer);
 		void PushOverlay(Layer* layer);
 
+		void Exit() { m_Running = false; }
+
 		Renderer* GetRenderer() { return m_Renderer; }
 		
 		static Application& Get() { return *s_Instance; }

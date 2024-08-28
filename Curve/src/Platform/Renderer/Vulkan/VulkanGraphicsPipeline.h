@@ -6,7 +6,7 @@
 
 namespace cv {
 
-	struct GraphicsPipelineData;
+	struct PipelineData;
 
 	class VulkanGraphicsPipeline : public GraphicsPipeline
 	{
@@ -23,7 +23,7 @@ namespace cv {
 		virtual const void* GetNativeData() const override { return m_Data; }
 	private:
 		VulkanRenderer* m_Renderer = nullptr;
-		GraphicsPipelineData* m_Data = nullptr;
+		PipelineData* m_Data = nullptr;
 		Framebuffer* m_Framebuffer = nullptr;
 	};
 

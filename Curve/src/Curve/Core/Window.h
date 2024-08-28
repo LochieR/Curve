@@ -46,6 +46,7 @@ namespace cv {
 
 #ifdef CV_PLATFORM_WINDOWS
 		void SetWindowAttribute(WindowAttribute attribute, const glm::vec4& value);
+		glm::vec4 GetWindowAttribute(WindowAttribute attribute) const;
 #endif
 	private:
 		GLFWwindow* m_Window = nullptr;

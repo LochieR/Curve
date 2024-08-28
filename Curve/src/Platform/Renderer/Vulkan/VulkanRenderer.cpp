@@ -8,6 +8,7 @@
 #include "VulkanShader.h"
 #include "VulkanSwapchain.h"
 #include "VulkanFramebuffer.h"
+#include "VulkanComputePipeline.h"
 #include "VulkanGraphicsPipeline.h"
 #include "VulkanImGuiLayer.h"
 
@@ -472,6 +473,9 @@ namespace cv {
 		spec.Multisample = true;
 
 		m_VkD->Swapchain = CreateSwapchain(spec);
+
+		VkPhysicalDeviceProperties properties{};
+		vkGetPhysicalDeviceProperties(m_VkD->PhysicalDevice, &properties);
 	}
 
 	VulkanRenderer::~VulkanRenderer()
@@ -567,6 +571,11 @@ namespace cv {
 	void VulkanRenderer::DrawIndexed(CommandBuffer commandBuffer, size_t indexCount, size_t indexOffset) const
 	{
 		vkCmdDrawIndexed(commandBuffer.As<VkCommandBuffer>(), (uint32_t)indexCount, 1, (uint32_t)indexOffset, 0, 0);
+	}
+
+	void VulkanRenderer::Dispatch(CommandBuffer commandBuffer, uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ) const
+	{
+		vkCmdDispatch(commandBuffer.As<VkCommandBuffer>(), groupCountX, groupCountY, groupCountZ);
 	}
 
 	void VulkanRenderer::BeginCommandBuffer(CommandBuffer commandBuffer) const
@@ -691,14 +700,9 @@ namespace cv {
 		return new VulkanGraphicsPipeline(this, shader, topology, layout, framebuffer);
 	}
 
-	VertexBuffer* VulkanRenderer::CreateVertexBuffer(size_t size)
+	ComputePipeline* VulkanRenderer::CreateComputePipeline(Shader* shader, const InputLayout& layout)
 	{
-		return new VulkanVertexBuffer(this, size);
-	}
-
-	IndexBuffer* VulkanRenderer::CreateIndexBuffer(uint32_t* indices, uint32_t indexCount)
-	{
-		return new VulkanIndexBuffer(this, indices, indexCount);
+		return new VulkanComputePipeline(this, shader, layout);
 	}
 
 	Framebuffer* VulkanRenderer::CreateFramebuffer(const FramebufferSpecification& spec)
@@ -733,6 +737,11 @@ namespace cv {
 	void VulkanRenderer::SubmitResourceFree(std::function<void(VulkanRenderer*)>&& func)
 	{
 		m_VkD->ResourceFreeQueue[m_VkD->CurrentFrameIndex].push_back(func);
+	}
+
+	BufferBase* VulkanRenderer::CreateBufferBase(BufferType type, size_t size, const void* data)
+	{
+		return new VulkanBuffer(this, type, size, data);
 	}
 
 	void VulkanRenderer::CreateInstance()

@@ -213,6 +213,32 @@ namespace cv {
 				break;
 		}
 	}
+
+	glm::vec4 Window::GetWindowAttribute(WindowAttribute attribute) const
+	{
+		HWND hwnd = glfwGetWin32Window(m_Window);
+		COLORREF color = 0;
+
+		switch (attribute)
+		{
+			case WindowAttribute::TitlebarColor:
+			{
+				DwmGetWindowAttribute(hwnd, DWMWA_CAPTION_COLOR, &color, sizeof(COLORREF));
+				break;
+			}
+			case WindowAttribute::BorderColor:
+			{
+				DwmGetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, &color, sizeof(COLORREF));
+				break;
+			}
+		}
+
+		BYTE r = GetRValue(color);
+		BYTE g = GetGValue(color);
+		BYTE b = GetBValue(color);
+
+		return { (float)r / 255.0f, (float)g / 255.0f, (float)b / 255.0f, 1.0f };
+	}
 #endif
 
 }

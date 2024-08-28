@@ -16,8 +16,8 @@ namespace cv {
 		GraphCamera(float left, float right, float bottom, float top);
 		GraphCamera(float left, float right, float bottom, float top, float near, float far);
 
-		bool OnUpdate(Timestep ts);
-		bool OnEvent(Event& event);
+		bool OnUpdate(Timestep ts, bool ignoreInput = false);
+		bool OnEvent(Event& event, bool ignoreInput = false);
 
 		void OnResize(float width, float height);
 

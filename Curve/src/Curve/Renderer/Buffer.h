@@ -73,7 +73,8 @@ namespace cv {
 	enum class ShaderStage : uint8_t
 	{
 		Vertex = 0,
-		Fragment
+		Fragment,
+		Compute
 	};
 
 	struct PushConstantInfo
@@ -154,25 +155,114 @@ namespace cv {
 		}
 	};
 
-	class VertexBuffer
+	enum BufferType
 	{
-	public:
-		virtual ~VertexBuffer() = default;
-
-		virtual void Bind(CommandBuffer commandBuffer) const = 0;
-
-		virtual void SetData(const void* vertexData, uint32_t size) = 0;
-
-		virtual const InputLayout& GetLayout() const = 0;
-		virtual void SetLayout(const InputLayout& layout) = 0;
+		VertexBuffer = 1 << 0,
+		IndexBuffer = 1 << 1,
+		StorageBuffer = 1 << 2,
+		StagingBuffer = 1 << 3
 	};
 
-	class IndexBuffer
+	constexpr inline BufferType operator|(BufferType lhs, BufferType rhs)
+	{
+		return static_cast<BufferType>(
+			static_cast<std::underlying_type<BufferType>::type>(lhs) |
+			static_cast<std::underlying_type<BufferType>::type>(rhs)
+		);
+	}
+
+	constexpr inline BufferType operator&(BufferType lhs, BufferType rhs)
+	{
+		return static_cast<BufferType>(
+			static_cast<std::underlying_type<BufferType>::type>(lhs) &
+			static_cast<std::underlying_type<BufferType>::type>(rhs)
+		);
+	}
+
+	constexpr inline BufferType operator^(BufferType lhs, BufferType rhs)
+	{
+		return static_cast<BufferType>(
+			static_cast<std::underlying_type<BufferType>::type>(lhs) ^
+			static_cast<std::underlying_type<BufferType>::type>(rhs)
+		);
+	}
+
+	constexpr inline BufferType operator~(BufferType type)
+	{
+		return static_cast<BufferType>(~static_cast<std::underlying_type<BufferType>::type>(type));
+	}
+
+	constexpr inline BufferType& operator|=(BufferType& lhs, BufferType rhs)
+	{
+		lhs = lhs | rhs;
+		return lhs;
+	}
+
+	constexpr inline BufferType& operator&=(BufferType& lhs, BufferType rhs)
+	{
+		lhs = lhs & rhs;
+		return lhs;
+	}
+
+	constexpr inline BufferType& operator^=(BufferType& lhs, BufferType rhs)
+	{
+		lhs = lhs ^ rhs;
+		return lhs;
+	}
+
+	class BufferBase
 	{
 	public:
-		virtual ~IndexBuffer() = default;
+		virtual ~BufferBase() = default;
 
 		virtual void Bind(CommandBuffer commandBuffer) const = 0;
+
+		virtual void SetData(const void* data, size_t size) = 0;
+		virtual void SetData(int data, size_t size) = 0;
+
+		virtual void* Map(size_t size) = 0;
+		virtual void Unmap() = 0;
+
+		virtual size_t GetSize() const = 0;
+
+		virtual void* GetNativeData() = 0;
+		virtual const void* GetNativeData() const = 0;
+	};
+
+	template<BufferType Type>
+	class Buffer
+	{
+	public:
+		~Buffer() { delete m_Base; }
+
+		void Bind(CommandBuffer commandBuffer) const { m_Base->Bind(commandBuffer); }
+
+		void SetData(const void* data, size_t size) { m_Base->SetData(data, size); }
+		void SetData(int data, size_t size) { m_Base->SetData(data, size); }
+
+		void* Map(size_t size) { return m_Base->Map(size); }
+		void Unmap() { m_Base->Unmap(); }
+
+		size_t GetSize() const { return m_Base->GetSize(); }
+
+		template<typename T>
+		T& GetNativeData() { return *reinterpret_cast<T*>(GetNativeData()); }
+		template<typename T>
+		const T& GetNativeData() const { return *reinterpret_cast<const T*>(GetNativeData()); }
+
+		void* GetNativeData() { return m_Base->GetNativeData(); }
+		const void* GetNativeData() const { return m_Base->GetNativeData(); }
+
+		BufferBase* GetBase() const { return m_Base; }
+	private:
+		Buffer(BufferBase* base)
+			: m_Base(base)
+		{
+		}
+	private:
+		BufferBase* m_Base = nullptr;
+
+		friend class Renderer;
 	};
 
 }

@@ -54,120 +54,167 @@ namespace cv {
 			return attributeDescriptions;
 		}
 
+		static VkBufferUsageFlags GetBufferUsage(BufferType type)
+		{
+			VkBufferUsageFlags flags = 0;
+
+			if (type & VertexBuffer)
+				flags |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+			if (type & IndexBuffer)
+				flags |= VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+			if (type & StorageBuffer)
+				flags |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+			if (type & StagingBuffer)
+				flags |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+
+			return flags;
+		}
+
+		static bool NeedsStagingBuffer(BufferType type)
+		{
+			return (type & IndexBuffer) || (type & StorageBuffer);
+		}
+
+		static VkMemoryPropertyFlags GetBufferMemoryProperties(BufferType type)
+		{
+			VkMemoryPropertyFlags flags = 0;
+
+			if (NeedsStagingBuffer(type))
+				flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+			else
+				flags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+
+			return flags;
+		}
+
 	}
 
-	VulkanVertexBuffer::VulkanVertexBuffer(VulkanRenderer* renderer, size_t size)
-		: m_Renderer(renderer)
+	VulkanBuffer::VulkanBuffer(VulkanRenderer* renderer, BufferType type, size_t size, const void* data)
+		: m_Renderer(renderer), m_Type(type)
 	{
 		auto& vkd = renderer->GetVulkanData();
 
 		m_Data = new BufferData();
+		m_Data->Size = size;
 
 		Utils::CreateBuffer(
 			vkd.Device,
 			vkd.PhysicalDevice,
 			vkd.Allocator,
 			size,
-			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+			Utils::GetBufferUsage(type),
+			Utils::GetBufferMemoryProperties(type),
 			m_Data->Buffer,
 			m_Data->Memory
 		);
-		m_Data->Size = size;
+
+		if (Utils::NeedsStagingBuffer(type))
+		{
+			m_StagingData = new BufferData();
+
+			Utils::CreateBuffer(
+				vkd.Device,
+				vkd.PhysicalDevice,
+				vkd.Allocator,
+				size,
+				VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+				m_StagingData->Buffer,
+				m_StagingData->Memory
+			);
+		}
+
+		if (data)
+		{
+			void* memory = Map(size);
+			memcpy(memory, data, size);
+			Unmap();
+
+			if (Utils::NeedsStagingBuffer(type))
+				Utils::CopyBuffer(m_Renderer, m_StagingData->Buffer, m_Data->Buffer, size);
+		}
 	}
 
-	VulkanVertexBuffer::~VulkanVertexBuffer()
+	VulkanBuffer::~VulkanBuffer()
 	{
-		m_Renderer->SubmitResourceFree([bd = m_Data](VulkanRenderer* renderer)
+		m_Renderer->SubmitResourceFree([bd = m_Data, sd = m_StagingData](VulkanRenderer* renderer)
 		{
 			auto& vkd = renderer->GetVulkanData();
 
 			vkDestroyBuffer(vkd.Device, bd->Buffer, vkd.Allocator);
 			vkFreeMemory(vkd.Device, bd->Memory, vkd.Allocator);
 
+			if (sd)
+			{
+				vkDestroyBuffer(vkd.Device, sd->Buffer, vkd.Allocator);
+				vkFreeMemory(vkd.Device, sd->Memory, vkd.Allocator);
+			}
+
 			delete bd;
 		});
 	}
 
-	void VulkanVertexBuffer::Bind(CommandBuffer commandBuffer) const
+	void VulkanBuffer::Bind(CommandBuffer commandBuffer) const
 	{
-		size_t offset = 0;
-		vkCmdBindVertexBuffers(commandBuffer.As<VkCommandBuffer>(), 0, 1, &m_Data->Buffer, &offset);
-	}
-
-	void VulkanVertexBuffer::SetData(const void* vertexData, uint32_t size)
-	{
-		auto& vkd = m_Renderer->GetVulkanData();
-
-		void* data;
-		vkMapMemory(vkd.Device, m_Data->Memory, 0, size, 0, &data);
-		memcpy(data, vertexData, (size_t)size);
-		vkUnmapMemory(vkd.Device, m_Data->Memory);
-	}
-
-	VulkanIndexBuffer::VulkanIndexBuffer(VulkanRenderer* renderer, uint32_t* indices, uint32_t indexCount)
-		: m_Renderer(renderer)
-	{
-		auto& vkd = m_Renderer->GetVulkanData();
-
-		m_Data = new BufferData();
-		m_Data->Size = sizeof(uint32_t) * indexCount;
-
-		VkBuffer stagingBuffer;
-		VkDeviceMemory stagingBufferMemory;
-		Utils::CreateBuffer(
-			vkd.Device,
-			vkd.PhysicalDevice,
-			vkd.Allocator,
-			m_Data->Size,
-			VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-			stagingBuffer,
-			stagingBufferMemory
-		);
-
-		void* data;
-		vkMapMemory(vkd.Device, stagingBufferMemory, 0, m_Data->Size, 0, &data);
-		memcpy(data, indices, m_Data->Size);
-		vkUnmapMemory(vkd.Device, stagingBufferMemory);
-
-		Utils::CreateBuffer(
-			vkd.Device,
-			vkd.PhysicalDevice,
-			vkd.Allocator,
-			m_Data->Size,
-			VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-			m_Data->Buffer,
-			m_Data->Memory
-		);
-		Utils::CopyBuffer(
-			m_Renderer,
-			stagingBuffer,
-			m_Data->Buffer,
-			m_Data->Size
-		);
-
-		vkDestroyBuffer(vkd.Device, stagingBuffer, vkd.Allocator);
-		vkFreeMemory(vkd.Device, stagingBufferMemory, vkd.Allocator);
-	}
-
-	VulkanIndexBuffer::~VulkanIndexBuffer()
-	{
-		m_Renderer->SubmitResourceFree([bd = m_Data](VulkanRenderer* renderer)
+		if (m_Type & VertexBuffer)
 		{
-			auto& vkd = renderer->GetVulkanData();
-
-			vkDestroyBuffer(vkd.Device, bd->Buffer, vkd.Allocator);
-			vkFreeMemory(vkd.Device, bd->Memory, vkd.Allocator);
-
-			delete bd;
-		});
+			VkDeviceSize offset = 0;
+			vkCmdBindVertexBuffers(commandBuffer.As<VkCommandBuffer>(), 0, 1, &m_Data->Buffer, &offset);
+		}
+		if (m_Type & IndexBuffer)
+		{
+			vkCmdBindIndexBuffer(commandBuffer.As<VkCommandBuffer>(), m_Data->Buffer, 0, VK_INDEX_TYPE_UINT32);
+		}
 	}
 
-	void VulkanIndexBuffer::Bind(CommandBuffer commandBuffer) const
+	void VulkanBuffer::SetData(const void* data, size_t size)
 	{
-		vkCmdBindIndexBuffer(commandBuffer.As<VkCommandBuffer>(), m_Data->Buffer, 0, VK_INDEX_TYPE_UINT32);
+		void* memory = Map(size);
+		memcpy(memory, data, size);
+		Unmap();
+	}
+
+	void VulkanBuffer::SetData(int data, size_t size)
+	{
+		void* memory = Map(size);
+		memset(memory, data, size);
+		Unmap();
+	}
+
+	void* VulkanBuffer::Map(size_t size)
+	{
+		auto& vkd = m_Renderer->GetVulkanData();
+
+		if (Utils::NeedsStagingBuffer(m_Type))
+		{
+			void* memory;
+			vkMapMemory(vkd.Device, m_StagingData->Memory, 0, size, 0, &memory);
+			return memory;
+		}
+		else
+		{
+			void* memory;
+			vkMapMemory(vkd.Device, m_Data->Memory, 0, size, 0, &memory);
+			return memory;
+		}
+	}
+
+	void VulkanBuffer::Unmap()
+	{
+		auto& vkd = m_Renderer->GetVulkanData();
+
+		if (Utils::NeedsStagingBuffer(m_Type))
+		{
+			vkUnmapMemory(vkd.Device, m_StagingData->Memory);
+			Utils::CopyBuffer(m_Renderer, m_StagingData->Buffer, m_Data->Buffer, m_Data->Size);
+		}
+		else
+			vkUnmapMemory(vkd.Device, m_Data->Memory);
+	}
+
+	size_t VulkanBuffer::GetSize() const
+	{
+		return m_Data->Size;
 	}
 
 }

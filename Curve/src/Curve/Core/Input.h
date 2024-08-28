@@ -165,10 +165,8 @@ namespace cv {
 		static bool IsKeyDown(KeyCode key);
 		static bool IsMouseButtonDown(MouseButton button);
 		static glm::vec2 GetMousePosition();
-		static void SetActiveWindow(void* handle)
-		{
-			s_ActiveWindow = handle;
-		}
+		static void SetActiveWindow(void* handle) { s_ActiveWindow = handle; }
+		static void* GetActiveWindow() { return s_ActiveWindow; }
 	private:
 		inline static void* s_ActiveWindow = nullptr;
 	};

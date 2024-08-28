@@ -5,6 +5,7 @@
 #include "Swapchain.h"
 #include "Framebuffer.h"
 #include "CommandBuffer.h"
+#include "ComputePipeline.h"
 #include "GraphicsPipeline.h"
 #include "NativeRendererObject.h"
 
@@ -31,6 +32,8 @@ namespace cv {
 		virtual void Draw(CommandBuffer commandBuffer, size_t vertexCount, size_t vertexOffset = 0) const = 0;
 		virtual void DrawIndexed(CommandBuffer commandBuffer, size_t indexCount, size_t indexOffset = 0) const = 0;
 
+		virtual void Dispatch(CommandBuffer commandBuffer, uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ) const = 0;
+
 		virtual void BeginCommandBuffer(CommandBuffer commandBuffer) const = 0;
 		virtual void EndCommandBuffer(CommandBuffer commandBuffer) const = 0;
 		virtual void SubmitCommandBuffer(CommandBuffer commandBuffer) const = 0;
@@ -45,10 +48,15 @@ namespace cv {
 		virtual Shader* CreateShader(const std::filesystem::path& path) = 0;
 		virtual GraphicsPipeline* CreateGraphicsPipeline(Shader* shader, PrimitiveTopology topology, const InputLayout& layout) = 0;
 		virtual GraphicsPipeline* CreateGraphicsPipeline(Shader* shader, PrimitiveTopology topology, const InputLayout& layout, Framebuffer* framebuffer) = 0;
-		virtual VertexBuffer* CreateVertexBuffer(size_t size) = 0;
-		virtual IndexBuffer* CreateIndexBuffer(uint32_t* indices, uint32_t indexCount) = 0;
+		virtual ComputePipeline* CreateComputePipeline(Shader* shader, const InputLayout& layout) = 0;
 		virtual Framebuffer* CreateFramebuffer(const FramebufferSpecification& spec) = 0;
 		virtual ImGuiLayer* CreateImGuiLayer() = 0;
+
+		template<BufferType Type>
+		Buffer<Type>* CreateBuffer(size_t size, const void* data = nullptr)
+		{
+			return new Buffer<Type>(CreateBufferBase(Type, size, data));
+		}
 
 		virtual uint32_t GetCurrentFrameIndex() const = 0;
 
@@ -56,6 +64,8 @@ namespace cv {
 		T& GetNativeData() { return *reinterpret_cast<T*>(GetNativeData()); }
 		template<typename T>
 		const T& GetNativeData() const { return *reinterpret_cast<const T*>(GetNativeData()); }
+	private:
+		virtual BufferBase* CreateBufferBase(BufferType type, size_t size, const void* data = nullptr) = 0;
 	};
 
 }

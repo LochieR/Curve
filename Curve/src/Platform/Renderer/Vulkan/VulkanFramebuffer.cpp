@@ -171,23 +171,6 @@ namespace cv {
 			}
 		}
 
-		/*{
-			VkFormat colorFormat = vkd.SwapchainImageFormat;
-
-			renderer->CreateImage(
-				spec.Width,
-				spec.Height,
-				m_MSAASampleCount,
-				colorFormat,
-				VK_IMAGE_TILING_OPTIMAL,
-				VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-				VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-				m_ColorImage,
-				m_ColorImageMemory
-			);
-			m_ColorImageView = renderer->CreateImageView(m_ColorImage, colorFormat, VK_IMAGE_ASPECT_COLOR_BIT);
-		}*/
-
 		{
 			std::vector<VkAttachmentDescription> attachments;
 			std::vector<VkAttachmentReference> colorRefs;
@@ -409,6 +392,11 @@ namespace cv {
 		{
 			m_Data->Descriptors[i] = ImGui_ImplVulkan_AddTexture(m_Data->Sampler, m_Data->ImageViews[i], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 		}
+
+		m_Data->ClearValues.push_back(VkClearValue{ .color = { 0.0f, 0.0f, 0.0f, 1.0f} }); // main attachment
+		for (size_t i = 0; i < m_Data->AttachmentImages.size(); i++)
+			m_Data->ClearValues.push_back(VkClearValue{ .color = { 0.0f, 0.0f, 0.0f, 0.0f } }); // extra color attachments
+		m_Data->ClearValues.push_back(VkClearValue{ .depthStencil = { 1.0f, 0 } }); // depth attachment
 	}
 
 	VulkanFramebuffer::~VulkanFramebuffer()
@@ -459,33 +447,6 @@ namespace cv {
 		auto& vkd = m_Renderer->GetVulkanData();
 		m_Data->ImageIndex = m_Renderer->GetSwapchain()->GetImageIndex();
 
-		for (uint32_t i = 0; i < m_Data->AttachmentImages.size(); i++)
-		{
-			VkImageMemoryBarrier barrier{};
-			barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-			barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-			barrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-			barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			barrier.image = m_Data->AttachmentImages[i][m_Data->ImageIndex];
-			barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			barrier.subresourceRange.baseMipLevel = 0;
-			barrier.subresourceRange.levelCount = 1;
-			barrier.subresourceRange.baseArrayLayer = 0;
-			barrier.subresourceRange.layerCount = 1;
-			barrier.srcAccessMask = 0;
-			barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-
-			vkCmdPipelineBarrier(
-				commandBuffer.As<VkCommandBuffer>(),
-				VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-				0,
-				0, nullptr,
-				0, nullptr,
-				1, &barrier
-			);
-		}
-
 		VkRenderPassBeginInfo renderPassInfo{};
 		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 		renderPassInfo.renderPass = m_Data->RenderPass;
@@ -493,14 +454,8 @@ namespace cv {
 		renderPassInfo.renderArea.offset = { 0, 0 };
 		renderPassInfo.framebuffer = m_Data->Framebuffers[m_Data->ImageIndex];
 
-		std::vector<VkClearValue> clearValues;
-		clearValues.push_back(VkClearValue{ .color = { 0.0f, 0.0f, 0.0f, 1.0f}}); // main attachment
-		for (size_t i = 0; i < m_Data->AttachmentImages.size(); i++)
-			clearValues.push_back(VkClearValue{ .color = { 0.0f, 0.0f, 0.0f, 0.0f } }); // extra color attachments
-		clearValues.push_back(VkClearValue{ .depthStencil = { 1.0f, 0 } }); // depth attachment
-
-		renderPassInfo.clearValueCount = (uint32_t)clearValues.size();
-		renderPassInfo.pClearValues = clearValues.data();
+		renderPassInfo.clearValueCount = (uint32_t)m_Data->ClearValues.size();
+		renderPassInfo.pClearValues = m_Data->ClearValues.data();
 
 		vkCmdBeginRenderPass(commandBuffer.As<VkCommandBuffer>(), &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 	}
@@ -911,6 +866,181 @@ namespace cv {
 		}
 
 		return count;
+	}
+
+	void VulkanFramebuffer::CopyAttachmentImageToBuffer(CommandBuffer commandBuffer, uint32_t attachmentIndex, Buffer<StagingBuffer>* buffer)
+	{
+		CV_ASSERT(attachmentIndex > 0 && "Can't copy main color attachment to buffer!");
+
+		attachmentIndex--; // account for first color attachment
+
+		if (!m_Specification.Multisample)
+		{
+			VkImageMemoryBarrier barrier{};
+			barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+			barrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+			barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+			barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			barrier.image = m_Data->AttachmentImages[attachmentIndex][m_Data->ImageIndex];
+			barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			barrier.subresourceRange.baseMipLevel = 0;
+			barrier.subresourceRange.levelCount = 1;
+			barrier.subresourceRange.baseArrayLayer = 0;
+			barrier.subresourceRange.layerCount = 1;
+			barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+			barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+
+			vkCmdPipelineBarrier(
+				commandBuffer.As<VkCommandBuffer>(),
+				VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+				0,
+				0, nullptr,
+				0, nullptr,
+				1, &barrier
+			);
+		}
+		else
+		{
+			VkImageMemoryBarrier barrier{};
+			barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+			barrier.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+			barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			barrier.image = m_Data->AttachmentImages[attachmentIndex][m_Data->ImageIndex];
+			barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			barrier.subresourceRange.baseMipLevel = 0;
+			barrier.subresourceRange.levelCount = 1;
+			barrier.subresourceRange.baseArrayLayer = 0;
+			barrier.subresourceRange.layerCount = 1;
+			barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+			barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+
+			vkCmdPipelineBarrier(
+				commandBuffer.As<VkCommandBuffer>(),
+				VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+				VK_PIPELINE_STAGE_TRANSFER_BIT,
+				0,
+				0, nullptr,
+				0, nullptr,
+				1, &barrier
+			);
+		}
+
+		VkImageSubresourceLayers subresource{};
+		subresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		subresource.mipLevel = 0;
+		subresource.baseArrayLayer = 0;
+		subresource.layerCount = 1;
+
+		VkBufferImageCopy region{};
+		region.bufferOffset = 0;
+		region.bufferRowLength = 0;
+		region.bufferImageHeight = 0;
+		region.imageSubresource = subresource;
+		region.imageOffset = { 0, 0, 0 };
+		region.imageExtent = { m_Specification.Width, m_Specification.Height };
+		region.imageExtent.depth = 1;
+
+		vkCmdCopyImageToBuffer(
+			commandBuffer.As<VkCommandBuffer>(),
+			m_Data->AttachmentImages[attachmentIndex][m_Data->ImageIndex],
+			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+			buffer->GetNativeData<BufferData>().Buffer,
+			1, &region
+		);
+	}
+
+	void VulkanFramebuffer::CopyAttachmentImageToBuffer(CommandBuffer commandBuffer, uint32_t attachmentIndex, Buffer<StagingBuffer>* buffer, const glm::vec2& pixelCoordinate)
+	{
+		CV_ASSERT(attachmentIndex > 0 && "Can't copy main color attachment to buffer!");
+
+		attachmentIndex--; // account for first color attachment
+
+		if (!m_Specification.Multisample)
+		{
+			VkImageMemoryBarrier barrier{};
+			barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+			barrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+			barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+			barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			barrier.image = m_Data->AttachmentImages[attachmentIndex][m_Data->ImageIndex];
+			barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			barrier.subresourceRange.baseMipLevel = 0;
+			barrier.subresourceRange.levelCount = 1;
+			barrier.subresourceRange.baseArrayLayer = 0;
+			barrier.subresourceRange.layerCount = 1;
+			barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+			barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+
+			vkCmdPipelineBarrier(
+				commandBuffer.As<VkCommandBuffer>(),
+				VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+				0,
+				0, nullptr,
+				0, nullptr,
+				1, &barrier
+			);
+		}
+		else
+		{
+			VkImageMemoryBarrier barrier{};
+			barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+			barrier.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+			barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			barrier.image = m_Data->AttachmentImages[attachmentIndex][m_Data->ImageIndex];
+			barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			barrier.subresourceRange.baseMipLevel = 0;
+			barrier.subresourceRange.levelCount = 1;
+			barrier.subresourceRange.baseArrayLayer = 0;
+			barrier.subresourceRange.layerCount = 1;
+			barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+			barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+
+			vkCmdPipelineBarrier(
+				commandBuffer.As<VkCommandBuffer>(),
+				VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+				VK_PIPELINE_STAGE_TRANSFER_BIT,
+				0,
+				0, nullptr,
+				0, nullptr,
+				1, &barrier
+			);
+		}
+
+		VkImageSubresourceLayers subresource{};
+		subresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		subresource.mipLevel = 0;
+		subresource.baseArrayLayer = 0;
+		subresource.layerCount = 1;
+
+		VkBufferImageCopy region{};
+		region.bufferOffset = 0;
+		region.bufferRowLength = 0;
+		region.bufferImageHeight = 0;
+		region.imageSubresource = subresource;
+		region.imageOffset = { (int)pixelCoordinate.x, (int)pixelCoordinate.y, 0};
+		region.imageExtent = { 1, 1 };
+		region.imageExtent.depth = 1;
+
+		vkCmdCopyImageToBuffer(
+			commandBuffer.As<VkCommandBuffer>(),
+			m_Data->AttachmentImages[attachmentIndex][m_Data->ImageIndex],
+			VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+			buffer->GetNativeData<BufferData>().Buffer,
+			1, &region
+		);
+	}
+
+	void VulkanFramebuffer::CopyAttachmentImageToBuffer(uint32_t attachmentIndex, Buffer<StagingBuffer>* buffer)
+	{
+		CommandBuffer commandBuffer = m_Renderer->BeginSingleTimeCommands();	
+		CopyAttachmentImageToBuffer(commandBuffer, attachmentIndex, buffer);
+		m_Renderer->EndSingleTimeCommands(commandBuffer);
 	}
 
 	void* VulkanFramebuffer::GetCurrentDescriptor() const
